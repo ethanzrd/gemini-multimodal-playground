@@ -39,24 +39,31 @@ class GeminiConnection:
         if not self.config:
             raise ValueError("Configuration must be set before connecting")
 
+        # Build generation_config dynamically based on client preferences
+        generation_config = {
+            "response_modalities": ["AUDIO"],
+            "speech_config": {
+                "voice_config": {
+                    "prebuilt_voice_config": {
+                        "voice_name": self.config.get("voice", "Puck")
+                    }
+                }
+            }
+        }
+
+        # If the client enabled Google Search, add the tool configuration expected by Gemini
+        if self.config.get("googleSearch"):
+            generation_config["tools"] = [{"google_search": {}}]
+
         # Send initial setup message with configuration
         setup_message = {
             "setup": {
                 "model": f"models/{self.model}",
-                "generation_config": {
-                    "response_modalities": ["AUDIO"],
-                    "speech_config": {
-                        "voice_config": {
-                            "prebuilt_voice_config": {
-                                "voice_name": self.config["voice"]
-                            }
-                        }
-                    }
-                },
+                "generation_config": generation_config,
                 "system_instruction": {
                     "parts": [
                         {
-                            "text": self.config["systemPrompt"]
+                            "text": self.config.get("systemPrompt", "You are a friendly Gemini 2.0 model.")
                         }
                     ]
                 }

@@ -108,15 +108,30 @@ export default function GeminiVoiceChat() {
       const processor = audioContextRef.current.createScriptProcessor(512, 1, 1);
       
       processor.onaudioprocess = (e) => {
-        if (wsRef.current?.readyState === WebSocket.OPEN) {
-            const inputData = e.inputBuffer.getChannelData(0);
-            const pcmData = float32ToPcm16(inputData);
-            // Convert to base64 and send as binary
-            const base64Data = btoa(String.fromCharCode(...new Uint8Array(pcmData.buffer)));
-            wsRef.current.send(JSON.stringify({
-              type: 'audio',
-              data: base64Data
-            }));
+        // Respect "Allow Interruptions" setting. If Gemini is currently speaking and interruptions
+        // are disabled, we skip forwarding microphone audio to the backend until playback finishes.
+        const shouldSend = (!isPlaying) || config.allowInterruptions;
+
+        if (shouldSend && wsRef.current?.readyState === WebSocket.OPEN) {
+          const inputData = e.inputBuffer.getChannelData(0);
+          const pcmData = float32ToPcm16(inputData);
+
+          // Simple voice-activity check – compute RMS and treat very low values as silence.
+          // This reduces bandwidth and prevents Gemini from being spammed with silence.
+          let rms = 0;
+          for (let i = 0; i < pcmData.length; i++) {
+            rms += pcmData[i] * pcmData[i];
+          }
+          rms = Math.sqrt(rms / pcmData.length);
+
+          // If silence detected, send a zeroed buffer so timing remains consistent; otherwise send actual audio.
+          const dataToSend = rms < 100 ? new Int16Array(pcmData.length).fill(0) : pcmData;
+
+          const base64Data = btoa(String.fromCharCode(...new Uint8Array(dataToSend.buffer)));
+          wsRef.current.send(JSON.stringify({
+            type: 'audio',
+            data: base64Data
+          }));
         }
       };
 
@@ -338,6 +353,17 @@ export default function GeminiVoiceChat() {
                 disabled={isConnected}
               />
               <Label htmlFor="google-search">Enable Google Search</Label>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="allow-interruptions"
+                checked={config.allowInterruptions}
+                onCheckedChange={(checked) =>
+                  setConfig(prev => ({ ...prev, allowInterruptions: checked as boolean }))}
+                disabled={isConnected}
+              />
+              <Label htmlFor="allow-interruptions">Allow Interruptions</Label>
             </div>
           </CardContent>
         </Card>
