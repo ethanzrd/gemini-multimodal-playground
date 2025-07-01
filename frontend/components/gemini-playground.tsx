@@ -276,6 +276,20 @@ export default function GeminiVoiceChat() {
     setVideoEnabled(!videoEnabled);
   };
 
+  // Stop only the video stream and related timers
+  const stopVideo = () => {
+    if (videoStreamRef.current) {
+      videoStreamRef.current.getTracks().forEach(track => track.stop());
+      videoStreamRef.current = null;
+    }
+    if (videoIntervalRef.current) {
+      clearInterval(videoIntervalRef.current);
+      videoIntervalRef.current = null;
+    }
+    setVideoEnabled(false);
+    setVideoSource(null);
+  };
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
